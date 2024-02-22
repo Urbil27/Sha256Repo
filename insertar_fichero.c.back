@@ -1,0 +1,84 @@
+#include <sys/types.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+#include "s_my_sha256header.h"
+#define error(a) {perror(a); exit(1);};
+#define BUFSIZE 80
+#define OK (0)
+#define ERROR_GENERATE_SHA256_HEADER (1)
+#define ERROR_OPEN_DAT_FILE (2)
+#define ERROR_OPEN_SHA_REPO_FILE (3)
+
+#define ERROR_GENERATE_SHA_REPO_FILE (4)
+#define ERROR_GENERATE_SHA_REPO_FILE2 (5)
+
+
+#define HEADER_OK (1)
+#define HEADER_ERR (2)
+#define SHA256_GEN_ERR (3)
+
+//Funcion que crea las cabeceras sha256
+int Builsha256RepoHeader(char *FileName, struct c_sha256header *psha256header)
+{
+    char calc_hash[HEX_SHA256_HASH_SIZE];
+    int Return_Code;
+    int stderr = 2;
+   // Fill all struct psha256header members
+
+   bzero(psha256header, sizeof(struct c_sha256header));     // Fill all struct data with zeros
+
+   strcpy(psha256header->fname, FileName);   // File name
+
+   psha256header->size = 0;                  // At the moment it is an unknown value
+                                             // Later we can fill it in
+
+   // Call to function (sha256_file) to generate sha256 sum of file data
+   Return_Code = sha256sum_file(FileName, calc_hash);
+
+   if ( Return_Code != 0)  {
+        fprintf(2,"Error on hash function call (err=%d) \n",Return_Code);
+        return SHA256_GEN_ERR;
+   }
+
+   strcpy(psha256header->hash, calc_hash);     // fill  sha256 hash psha256header of argv[1]
+                                               // in psha256header
+   return HEADER_OK;
+}
+
+//Funcion insertar archivo
+insertar_archivo (char *r_dat, char *r_repo)
+{
+	int stderr = 2;
+	int f_dat,f_repo;
+	int n, ret;
+	char buf[BUFSIZE];
+	struct c_sha256header my_sha256header;
+	//Abrimos o creamos el repo para leectura y escritura
+	if ((f_repo = open(r_repo, O_RDWR|O_CREAT)) == -1){
+		error("open")
+	}
+	//Abrimos el fichero fuente
+	if ((f_dat = open(r_dat, O_RDONLY)) == -1){
+               	error("open");
+        }
+	//Creamos las cabeceras sha256 del fichero fuente
+ 	bzero(&my_sha256header, sizeof(my_sha256header));
+    	ret = Builsha256RepoHeader(r_dat, &my_sha256header);
+    	if (ret !=HEADER_OK)
+    	{
+     		fprintf(stderr,"The sha256header data was not generated correctly\n");
+        	return ERROR_GENERATE_SHA256_HEADER;
+    	}
+
+	//Movemos el puntero al final del archivo
+        if (lseek(f_repo, 0, SEEK_END) == -1){
+                error("lseek");
+        }
+	//Escribimos el hash al final del fichero del repo
+	if (write (f_repo,ret,atoi(ret)) == -1){
+		error("write");
+	}
+	close(f_repo);
+	closer(f_dat);
+}
